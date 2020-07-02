@@ -123,6 +123,7 @@ impl text_input::Renderer for Null {
         _size: u16,
         _value: &text_input::Value,
         _state: &text_input::State,
+        _horizontal_alignment: HorizontalAlignment,
     ) -> f32 {
         0.0
     }
@@ -136,6 +137,7 @@ impl text_input::Renderer for Null {
         _size: u16,
         _placeholder: &str,
         _value: &text_input::Value,
+        _horizontal_alignment: HorizontalAlignment,
         _state: &text_input::State,
         _style: &Self::Style,
     ) -> Self::Output {

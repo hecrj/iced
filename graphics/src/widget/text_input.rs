@@ -51,6 +51,7 @@ where
         size: u16,
         value: &text_input::Value,
         state: &text_input::State,
+        horizontal_alignment: HorizontalAlignment,
     ) -> f32 {
         if state.is_focused() {
             let cursor = state.cursor();
@@ -60,13 +61,14 @@ where
                 cursor::State::Selection { end, .. } => end,
             };
 
-            let (_, offset) = measure_cursor_and_scroll_offset(
+            let (_, offset, _) = measure_cursor_and_scroll_offset(
                 self,
                 text_bounds,
                 value,
                 size,
                 focus_position,
                 font,
+                horizontal_alignment,
             );
 
             offset
@@ -84,6 +86,7 @@ where
         size: u16,
         placeholder: &str,
         value: &text_input::Value,
+        horizontal_alignment: HorizontalAlignment,
         state: &text_input::State,
         style_sheet: &Self::Style,
     ) -> Self::Output {
@@ -107,6 +110,37 @@ where
 
         let text = value.to_string();
 
+        let text_width = self.measure_value(
+            if text.is_empty() { placeholder } else { &text },
+            size,
+            font,
+        );
+
+        let is_clipped = text_width > text_bounds.width;
+
+        let current_text_bounds = Rectangle {
+            x: match horizontal_alignment {
+                HorizontalAlignment::Left => text_bounds.x,
+                HorizontalAlignment::Center => {
+                    if is_clipped {
+                        text_bounds.x
+                    } else {
+                        text_bounds.center_x()
+                    }
+                }
+                HorizontalAlignment::Right => {
+                    if is_clipped {
+                        text_bounds.x
+                    } else {
+                        text_bounds.x + text_bounds.width
+                    }
+                }
+            },
+            y: text_bounds.center_y(),
+            width: f32::INFINITY,
+            ..text_bounds
+        };
+
         let text_value = Primitive::Text {
             content: if text.is_empty() {
                 placeholder.to_string()
@@ -119,13 +153,13 @@ where
                 style_sheet.value_color()
             },
             font,
-            bounds: Rectangle {
-                y: text_bounds.center_y(),
-                width: f32::INFINITY,
-                ..text_bounds
-            },
+            bounds: current_text_bounds,
             size: f32::from(size),
-            horizontal_alignment: HorizontalAlignment::Left,
+            horizontal_alignment: if is_clipped {
+                HorizontalAlignment::Left
+            } else {
+                horizontal_alignment
+            },
             vertical_alignment: VerticalAlignment::Center,
         };
 
@@ -134,7 +168,7 @@ where
 
             let (cursor_primitive, offset) = match cursor.state(value) {
                 cursor::State::Index(position) => {
-                    let (text_value_width, offset) =
+                    let (text_value_width, offset, text_width_after_cursor) =
                         measure_cursor_and_scroll_offset(
                             self,
                             text_bounds,
@@ -142,15 +176,42 @@ where
                             size,
                             position,
                             font,
+                            horizontal_alignment,
                         );
+
+                    let cursor_bounds = Rectangle {
+                        x: match horizontal_alignment {
+                            HorizontalAlignment::Left => {
+                                text_bounds.x + text_value_width
+                            }
+                            HorizontalAlignment::Center => {
+                                if is_clipped {
+                                    text_bounds.x + text_value_width
+                                } else {
+                                    text_bounds.center_x()
+                                        + (text_value_width / 2.0)
+                                        - (text_width_after_cursor / 2.0)
+                                }
+                            }
+                            HorizontalAlignment::Right => {
+                                if is_clipped {
+                                    text_bounds.x + text_value_width
+                                } else {
+                                    text_bounds.x + text_bounds.width
+                                        - text_width_after_cursor
+                                }
+                            }
+                        },
+                        ..text_bounds
+                    };
 
                     (
                         Primitive::Quad {
                             bounds: Rectangle {
-                                x: text_bounds.x + text_value_width,
-                                y: text_bounds.y,
+                                x: cursor_bounds.x,
+                                y: cursor_bounds.y,
                                 width: 1.0,
-                                height: text_bounds.height,
+                                height: cursor_bounds.height,
                             },
                             background: Background::Color(
                                 style_sheet.value_color(),
@@ -166,35 +227,75 @@ where
                     let left = start.min(end);
                     let right = end.max(start);
 
-                    let (left_position, left_offset) =
+                    let selection_bounds = Rectangle {
+                        x: match horizontal_alignment {
+                            HorizontalAlignment::Left => text_bounds.x,
+                            HorizontalAlignment::Center => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.center_x()
+                                }
+                            }
+                            HorizontalAlignment::Right => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.x + text_bounds.width
+                                }
+                            }
+                        },
+                        ..text_bounds
+                    };
+
+                    let (left_position, left_offset, _) =
                         measure_cursor_and_scroll_offset(
                             self,
-                            text_bounds,
+                            selection_bounds,
                             value,
                             size,
                             left,
                             font,
+                            horizontal_alignment,
                         );
 
-                    let (right_position, right_offset) =
+                    let (right_position, right_offset, _) =
                         measure_cursor_and_scroll_offset(
                             self,
-                            text_bounds,
+                            selection_bounds,
                             value,
                             size,
                             right,
                             font,
+                            horizontal_alignment,
                         );
 
                     let width = right_position - left_position;
+                    let aligned_left_position = match horizontal_alignment {
+                        HorizontalAlignment::Left => left_position,
+                        HorizontalAlignment::Center => {
+                            if is_clipped {
+                                left_position
+                            } else {
+                                left_position - text_width / 2.0
+                            }
+                        }
+                        HorizontalAlignment::Right => {
+                            if is_clipped {
+                                left_position
+                            } else {
+                                left_position - text_width
+                            }
+                        }
+                    };
 
                     (
                         Primitive::Quad {
                             bounds: Rectangle {
-                                x: text_bounds.x + left_position,
-                                y: text_bounds.y,
+                                x: selection_bounds.x + aligned_left_position,
+                                y: selection_bounds.y,
                                 width,
-                                height: text_bounds.height,
+                                height: selection_bounds.height,
                             },
                             background: Background::Color(
                                 style_sheet.selection_color(),
@@ -222,13 +323,7 @@ where
             (text_value, Vector::new(0, 0))
         };
 
-        let text_width = self.measure_value(
-            if text.is_empty() { placeholder } else { &text },
-            size,
-            font,
-        );
-
-        let contents = if text_width > text_bounds.width {
+        let contents = if is_clipped {
             Primitive::Clip {
                 bounds: text_bounds,
                 offset,
@@ -258,7 +353,8 @@ fn measure_cursor_and_scroll_offset<B>(
     size: u16,
     cursor_index: usize,
     font: Font,
-) -> (f32, f32)
+    horizontal_alignment: HorizontalAlignment,
+) -> (f32, f32, f32)
 where
     B: Backend + backend::Text,
 {
@@ -268,7 +364,35 @@ where
 
     let text_value_width =
         renderer.measure_value(&text_before_cursor, size, font);
-    let offset = ((text_value_width + 5.0) - text_bounds.width).max(0.0);
+    let text_width = renderer.measure_value(&value.to_string(), size, font);
+    let text_width_after_cursor = text_width - text_value_width;
+    let is_clipped = text_width > text_bounds.width;
 
-    (text_value_width, offset)
+    let offset = {
+        let offset = match horizontal_alignment {
+            HorizontalAlignment::Left => {
+                (text_value_width + 5.0) - text_bounds.width
+            }
+            HorizontalAlignment::Center => {
+                if is_clipped {
+                    (text_value_width + 5.0) - text_bounds.width
+                } else {
+                    ((text_value_width + 5.0)
+                        - text_bounds.width
+                        - text_width_after_cursor)
+                        / 2.0
+                }
+            }
+            HorizontalAlignment::Right => {
+                if is_clipped {
+                    (text_value_width + 5.0) - text_bounds.width
+                } else {
+                    0.0
+                }
+            }
+        };
+        offset.max(0.0)
+    };
+
+    (text_value_width, offset, text_width_after_cursor)
 }

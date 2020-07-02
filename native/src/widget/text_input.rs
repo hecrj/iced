@@ -17,8 +17,8 @@ use editor::Editor;
 use crate::{
     keyboard, layout,
     mouse::{self, click},
-    Clipboard, Element, Event, Hasher, Layout, Length, Point, Rectangle, Size,
-    Widget,
+    Clipboard, Element, Event, Hasher, HorizontalAlignment, Layout, Length,
+    Point, Rectangle, Size, Widget,
 };
 
 use std::u32;
@@ -58,6 +58,7 @@ pub struct TextInput<'a, Message, Renderer: self::Renderer> {
     max_width: u32,
     padding: u16,
     size: Option<u16>,
+    horizontal_alignment: HorizontalAlignment,
     on_change: Box<dyn Fn(String) -> Message>,
     on_submit: Option<Message>,
     style: Renderer::Style,
@@ -93,6 +94,7 @@ impl<'a, Message, Renderer: self::Renderer> TextInput<'a, Message, Renderer> {
             max_width: u32::MAX,
             padding: 0,
             size: None,
+            horizontal_alignment: HorizontalAlignment::Left,
             on_change: Box::new(on_change),
             on_submit: None,
             style: Renderer::Style::default(),
@@ -144,6 +146,20 @@ impl<'a, Message, Renderer: self::Renderer> TextInput<'a, Message, Renderer> {
     /// [`TextInput`]: struct.TextInput.html
     pub fn size(mut self, size: u16) -> Self {
         self.size = Some(size);
+        self
+    }
+
+    /// Sets the [`HorizontalAlignment`] of the [`Text`] and
+    /// placeholder text inside the [`TextInput`]
+    ///
+    /// [`TextInput`]: struct.TextInput.html
+    /// [`Text`]: struct.Text.html
+    /// [`HorizontalAlignment`]: enum.HorizontalAlignment.html
+    pub fn horizontal_alignment(
+        mut self,
+        alignment: HorizontalAlignment,
+    ) -> Self {
+        self.horizontal_alignment = alignment;
         self
     }
 
@@ -214,7 +230,35 @@ where
 
                 if is_clicked {
                     let text_layout = layout.children().next().unwrap();
-                    let target = cursor_position.x - text_layout.bounds().x;
+                    let text_width = renderer.measure_value(
+                        &self.value.to_string(),
+                        self.size.unwrap(),
+                        self.font,
+                    );
+                    let text_bounds = text_layout.bounds();
+                    let is_clipped = text_width > text_bounds.width;
+                    let updated_text_bounds = Rectangle {
+                        x: match self.horizontal_alignment {
+                            HorizontalAlignment::Left => text_bounds.x,
+                            HorizontalAlignment::Center => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.center_x() - text_width / 2.0
+                                }
+                            }
+                            HorizontalAlignment::Right => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.x + text_bounds.width
+                                        - text_width
+                                }
+                            }
+                        },
+                        ..text_bounds
+                    };
+                    let target = cursor_position.x - updated_text_bounds.x;
 
                     let click = mouse::Click::new(
                         cursor_position,
@@ -231,12 +275,13 @@ where
                                 };
 
                                 let position = renderer.find_cursor_position(
-                                    text_layout.bounds(),
+                                    updated_text_bounds,
                                     self.font,
                                     self.size,
                                     &value,
                                     &self.state,
                                     target,
+                                    self.horizontal_alignment,
                                 );
 
                                 self.state.cursor.move_to(position);
@@ -255,6 +300,7 @@ where
                                     &self.value,
                                     &self.state,
                                     target,
+                                    self.horizontal_alignment,
                                 );
 
                                 self.state.cursor.select_range(
@@ -280,7 +326,35 @@ where
             Event::Mouse(mouse::Event::CursorMoved { x, .. }) => {
                 if self.state.is_dragging {
                     let text_layout = layout.children().next().unwrap();
-                    let target = x - text_layout.bounds().x;
+                    let text_width = renderer.measure_value(
+                        &self.value.to_string(),
+                        self.size.unwrap(),
+                        self.font,
+                    );
+                    let text_bounds = text_layout.bounds();
+                    let is_clipped = text_width > text_bounds.width;
+                    let updated_text_bounds = Rectangle {
+                        x: match self.horizontal_alignment {
+                            HorizontalAlignment::Left => text_bounds.x,
+                            HorizontalAlignment::Center => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.center_x() - text_width / 2.0
+                                }
+                            }
+                            HorizontalAlignment::Right => {
+                                if is_clipped {
+                                    text_bounds.x
+                                } else {
+                                    text_bounds.x + text_bounds.width
+                                        - text_width
+                                }
+                            }
+                        },
+                        ..text_bounds
+                    };
+                    let target = x - updated_text_bounds.x;
 
                     if target > 0.0 {
                         let value = if self.is_secure {
@@ -290,12 +364,13 @@ where
                         };
 
                         let position = renderer.find_cursor_position(
-                            text_layout.bounds(),
+                            updated_text_bounds,
                             self.font,
                             self.size,
                             &value,
                             &self.state,
                             target,
+                            self.horizontal_alignment,
                         );
 
                         self.state.cursor.select_range(
@@ -494,6 +569,7 @@ where
                 self.size.unwrap_or(renderer.default_size()),
                 &self.placeholder,
                 &self.value.secure(),
+                self.horizontal_alignment,
                 &self.state,
                 &self.style,
             )
@@ -506,6 +582,7 @@ where
                 self.size.unwrap_or(renderer.default_size()),
                 &self.placeholder,
                 &self.value,
+                self.horizontal_alignment,
                 &self.state,
                 &self.style,
             )
@@ -565,6 +642,7 @@ pub trait Renderer: crate::Renderer + Sized {
         size: u16,
         value: &Value,
         state: &State,
+        horizontal_alignment: HorizontalAlignment,
     ) -> f32;
 
     /// Draws a [`TextInput`].
@@ -589,6 +667,7 @@ pub trait Renderer: crate::Renderer + Sized {
         size: u16,
         placeholder: &str,
         value: &Value,
+        horizontal_alignment: HorizontalAlignment,
         state: &State,
         style: &Self::Style,
     ) -> Self::Output;
@@ -605,10 +684,18 @@ pub trait Renderer: crate::Renderer + Sized {
         value: &Value,
         state: &State,
         x: f32,
+        horizontal_alignment: HorizontalAlignment,
     ) -> usize {
         let size = size.unwrap_or(self.default_size());
 
-        let offset = self.offset(text_bounds, font, size, &value, &state);
+        let offset = self.offset(
+            text_bounds,
+            font,
+            size,
+            &value,
+            &state,
+            horizontal_alignment,
+        );
 
         find_cursor_position(
             self,
