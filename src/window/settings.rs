@@ -39,7 +39,7 @@ impl Default for Settings {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(all(feature = "web", target_arch = "wasm32")))]
 impl From<Settings> for iced_winit::settings::Window {
     fn from(settings: Settings) -> Self {
         Self {

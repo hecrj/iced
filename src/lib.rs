@@ -190,10 +190,11 @@ pub mod settings;
 pub mod widget;
 pub mod window;
 
-#[cfg(all(
-    any(feature = "tokio", feature = "async-std"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(any(
+    feature = "tokio",
+    feature = "async-std",
+    target_arch = "wasm32"
+),))]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "tokio", feature = "async-std"))))]
 pub mod time;
 
@@ -203,6 +204,9 @@ pub mod time;
     feature = "wgpu"
 ))]
 use iced_winit as runtime;
+
+#[cfg(all(target_arch = "wasm32", not(feature = "web")))]
+use iced_web_winit as runtime;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glow"))]
 use iced_glutin as runtime;
@@ -214,10 +218,10 @@ use iced_glutin as runtime;
 ))]
 use iced_wgpu as renderer;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glow"))]
+#[cfg(feature = "glow")]
 use iced_glow as renderer;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "web", target_arch = "wasm32"))]
 use iced_web as runtime;
 
 #[doc(no_inline)]
