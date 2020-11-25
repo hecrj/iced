@@ -1,0 +1,31 @@
+[package]
+name = "iced_ios"
+version = "0.1.0"
+authors = ["Sebastian Imlay <sebastian.imlay@gmail.com>"]
+edition = "2018"
+description = "iOS backend for iced"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+twox-hash = "1.5"
+raw-window-handle = "^0.3"
+winit = { git = "https://github.com/rust-windowing/winit", branch = "master"}
+objc = "0.2.7"
+log = "0.4"
+num-traits = "0.2"
+uikit-sys = { git = "https://github.com/simlay/uikit-sys", branch = "bindgen-category-and-no-copy" }
+dispatch = "0.2.0"
+
+[dependencies.iced_core]
+version = "0.2"
+path = "../core"
+
+[dependencies.iced_style]
+version = "0.1"
+path = "../style"
+
+[dependencies.iced_futures]
+version = "0.1"
+path = "../futures"
+features = ["thread-pool"]

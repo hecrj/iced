@@ -173,10 +173,10 @@
 //! [The Elm Architecture]: https://guide.elm-lang.org/architecture/
 //! [`Application`]: trait.Application.html
 //! [`Sandbox`]: trait.Sandbox.html
-#![deny(missing_docs)]
-#![deny(missing_debug_implementations)]
-#![deny(unused_results)]
-#![forbid(unsafe_code)]
+//#![deny(missing_docs)]
+//#![deny(missing_debug_implementations)]
+//#![deny(unused_results)]
+#![deny(unsafe_code)]
 #![forbid(rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 mod application;
@@ -208,26 +208,26 @@ pub mod time;
 
 #[cfg(all(
     not(target_arch = "wasm32"),
+    not(target_os = "ios"),
     not(feature = "glow"),
     feature = "wgpu"
 ))]
 use iced_winit as runtime;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glow"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), feature = "glow"))]
 use iced_glutin as runtime;
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    not(feature = "glow"),
-    feature = "wgpu"
-))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(feature = "glow"), feature = "wgpu"))]
 use iced_wgpu as renderer;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glow"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), feature = "glow"))]
 use iced_glow as renderer;
 
 #[cfg(target_arch = "wasm32")]
 use iced_web as runtime;
+
+#[cfg(target_os = "ios")]
+use iced_ios as runtime;
 
 #[doc(no_inline)]
 pub use widget::*;
