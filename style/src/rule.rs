@@ -90,10 +90,10 @@ struct Default;
 impl StyleSheet for Default {
     fn style(&self) -> Style {
         Style {
-            color: [0.6, 0.6, 0.6, 0.51].into(),
+            color: [0.6, 0.6, 0.6, 0.6].into(),
             width: 1,
             radius: 0.0,
-            fill_mode: FillMode::Percent(90.0),
+            fill_mode: FillMode::Full,
         }
     }
 }
