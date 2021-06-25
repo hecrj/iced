@@ -250,7 +250,7 @@ where
         clipboard: &mut dyn Clipboard,
         messages: &mut Vec<Message>,
     ) -> event::Status {
-        match event {
+        let event_status = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
                 let is_clicked = layout.bounds().contains(cursor_position);
@@ -320,13 +320,16 @@ where
 
                     self.state.last_click = Some(click);
 
-                    return event::Status::Captured;
+                    event::Status::Captured
+                } else {
+                    event::Status::Ignored
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerLifted { .. })
             | Event::Touch(touch::Event::FingerLost { .. }) => {
                 self.state.is_dragging = false;
+                event::Status::Ignored
             }
             Event::Mouse(mouse::Event::CursorMoved { position })
             | Event::Touch(touch::Event::FingerMoved { position, .. }) => {
@@ -356,7 +359,9 @@ where
                         );
                     }
 
-                    return event::Status::Captured;
+                    event::Status::Captured
+                } else {
+                    event::Status::Ignored
                 }
             }
             Event::Keyboard(keyboard::Event::CharacterReceived(c))
@@ -373,7 +378,7 @@ where
                 let message = (self.on_change)(editor.contents());
                 messages.push(message);
 
-                return event::Status::Captured;
+                event::Status::Captured
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key_code, ..
@@ -594,7 +599,7 @@ where
                     _ => {}
                 }
 
-                return event::Status::Captured;
+                event::Status::Captured
             }
             Event::Keyboard(keyboard::Event::KeyReleased {
                 key_code, ..
@@ -606,17 +611,34 @@ where
                     _ => {}
                 }
 
-                return event::Status::Captured;
+                event::Status::Captured
             }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers))
                 if self.state.is_focused =>
             {
                 self.state.keyboard_modifiers = modifiers;
+                event::Status::Ignored
             }
-            _ => {}
+            _ => event::Status::Ignored,
+        };
+
+        if self.state.is_focused {
+            let text_layout = layout.children().next().unwrap();
+            let index = self.state.cursor.start(&self.value);
+            let text_before_cursor = self.value.until(index).to_string();
+            let text_value_width = renderer.measure_value(
+                &text_before_cursor,
+                self.size.unwrap_or(renderer.default_size()),
+                self.font,
+            );
+            clipboard.set_ime_position(Point::new(
+                (text_layout.bounds().x + text_value_width)
+                    .min(text_layout.bounds().x + text_layout.bounds().width),
+                text_layout.bounds().y,
+            ));
         }
 
-        event::Status::Ignored
+        event_status
     }
 
     fn draw(

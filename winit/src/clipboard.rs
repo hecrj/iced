@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 /// A buffer for short-term storage and transfer within and between
 /// applications.
 #[allow(missing_debug_implementations)]
 pub struct Clipboard {
     state: State,
+    window: Arc<winit::window::Window>,
 }
 
 enum State {
@@ -12,13 +15,13 @@ enum State {
 
 impl Clipboard {
     /// Creates a new [`Clipboard`] for the given window.
-    pub fn connect(window: &winit::window::Window) -> Clipboard {
-        let state = window_clipboard::Clipboard::connect(window)
+    pub fn connect(window: Arc<winit::window::Window>) -> Clipboard {
+        let state = window_clipboard::Clipboard::connect(window.as_ref())
             .ok()
             .map(State::Connected)
             .unwrap_or(State::Unavailable);
 
-        Clipboard { state }
+        Clipboard { state, window }
     }
 
     /// Reads the current content of the [`Clipboard`] as text.
@@ -50,5 +53,12 @@ impl iced_native::Clipboard for Clipboard {
 
     fn write(&mut self, contents: String) {
         self.write(contents)
+    }
+
+    fn set_ime_position(&self, position: iced_core::Point) {
+        self.window
+            .set_ime_position(winit::dpi::LogicalPosition::new(
+                position.x, position.y,
+            ));
     }
 }
