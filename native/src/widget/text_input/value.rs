@@ -1,19 +1,22 @@
 use unicode_segmentation::UnicodeSegmentation;
 
+use smol_str::SmolStr;
+use std::fmt::{self, Display, Formatter};
+
 /// The value of a [`TextInput`].
 ///
 /// [`TextInput`]: crate::widget::TextInput
 // TODO: Reduce allocations, cache results (?)
 #[derive(Debug, Clone)]
 pub struct Value {
-    graphemes: Vec<String>,
+    graphemes: Vec<SmolStr>,
 }
 
 impl Value {
     /// Creates a new [`Value`] from a string slice.
     pub fn new(string: &str) -> Self {
         let graphemes = UnicodeSegmentation::graphemes(string, true)
-            .map(String::from)
+            .map(SmolStr::from)
             .collect();
 
         Self { graphemes }
@@ -37,9 +40,9 @@ impl Value {
         let previous_string =
             &self.graphemes[..index.min(self.graphemes.len())].concat();
 
-        UnicodeSegmentation::split_word_bound_indices(&previous_string as &str)
-            .filter(|(_, word)| !word.trim_start().is_empty())
-            .next_back()
+        UnicodeSegmentation::split_word_bound_indices(previous_string.as_str())
+            .rev()
+            .find(|(_, word)| !word.trim_start().is_empty())
             .map(|(i, previous_word)| {
                 index
                     - UnicodeSegmentation::graphemes(previous_word, true)
@@ -58,9 +61,10 @@ impl Value {
     pub fn next_end_of_word(&self, index: usize) -> usize {
         let next_string = &self.graphemes[index..].concat();
 
-        UnicodeSegmentation::split_word_bound_indices(&next_string as &str)
-            .filter(|(_, word)| !word.trim_start().is_empty())
-            .next()
+        #[allow(clippy::or_fun_call)]
+        // self.len() is very cheap, we don't need lazy eval
+        UnicodeSegmentation::split_word_bound_indices(next_string.as_str())
+            .find(|(_, word)| !word.trim_start().is_empty())
             .map(|(i, next_word)| {
                 index
                     + UnicodeSegmentation::graphemes(next_word, true).count()
@@ -73,36 +77,29 @@ impl Value {
             .unwrap_or(self.len())
     }
 
-    /// Returns a new [`Value`] containing the graphemes from `start` until the
+    /// Returns an array containing the graphemes from `start` until the
     /// given `end`.
-    pub fn select(&self, start: usize, end: usize) -> Self {
-        let graphemes =
-            self.graphemes[start.min(self.len())..end.min(self.len())].to_vec();
-
-        Self { graphemes }
+    pub fn select(&self, start: usize, end: usize) -> &[SmolStr] {
+        &self.graphemes[start.min(self.len())..end.min(self.len())]
     }
 
-    /// Returns a new [`Value`] containing the graphemes until the given
-    /// `index`.
-    pub fn until(&self, index: usize) -> Self {
-        let graphemes = self.graphemes[..index.min(self.len())].to_vec();
-
-        Self { graphemes }
-    }
-
-    /// Converts the [`Value`] into a `String`.
-    pub fn to_string(&self) -> String {
-        self.graphemes.concat()
+    /// Returns an array containing the graphemes until the given `index`.
+    pub fn until(&self, index: usize) -> &[SmolStr] {
+        &self.graphemes[..index.min(self.len())]
     }
 
     /// Inserts a new `char` at the given grapheme `index`.
     pub fn insert(&mut self, index: usize, c: char) {
-        self.graphemes.insert(index, c.to_string());
+        let mut temp = [0_u8; 4];
+        let tmp_str = c.encode_utf8(&mut temp);
+        self.graphemes.insert(index, SmolStr::new_inline(tmp_str));
 
-        self.graphemes =
-            UnicodeSegmentation::graphemes(&self.to_string() as &str, true)
-                .map(String::from)
-                .collect();
+        self.graphemes = UnicodeSegmentation::graphemes(
+            self.graphemes.concat().as_str(),
+            true,
+        )
+        .map(SmolStr::from)
+        .collect();
     }
 
     /// Inserts a bunch of graphemes at the given grapheme `index`.
@@ -126,9 +123,18 @@ impl Value {
     /// dot ('•') character.
     pub fn secure(&self) -> Self {
         Self {
-            graphemes: std::iter::repeat(String::from("•"))
+            graphemes: std::iter::repeat(SmolStr::new_inline("•"))
                 .take(self.graphemes.len())
                 .collect(),
         }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for grapheme in &self.graphemes {
+            write!(f, "{}", grapheme)?;
+        }
+        Ok(())
     }
 }

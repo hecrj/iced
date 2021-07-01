@@ -1,4 +1,6 @@
 //! Write some text for your users to read.
+use smol_str::SmolStr;
+
 use crate::{
     layout, Color, Element, Hasher, HorizontalAlignment, Layout, Length, Point,
     Rectangle, Size, VerticalAlignment, Widget,
@@ -19,9 +21,9 @@ use std::hash::Hash;
 /// ```
 ///
 /// ![Text drawn by `iced_wgpu`](https://github.com/hecrj/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/text.png?raw=true)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Text<Renderer: self::Renderer> {
-    content: String,
+    content: SmolStr,
     size: Option<u16>,
     color: Option<Color>,
     font: Renderer::Font,
@@ -33,7 +35,7 @@ pub struct Text<Renderer: self::Renderer> {
 
 impl<Renderer: self::Renderer> Text<Renderer> {
     /// Create a new fragment of [`Text`] with the given contents.
-    pub fn new<T: Into<String>>(label: T) -> Self {
+    pub fn new<T: Into<SmolStr>>(label: T) -> Self {
         Text {
             content: label.into(),
             size: None,
@@ -113,12 +115,15 @@ where
     ) -> layout::Node {
         let limits = limits.width(self.width).height(self.height);
 
-        let size = self.size.unwrap_or(renderer.default_size());
-
         let bounds = limits.max();
 
-        let (width, height) =
-            renderer.measure(&self.content, size, self.font, bounds);
+        #[allow(clippy::or_fun_call)]
+        let (width, height) = renderer.measure(
+            &self.content,
+            self.size.unwrap_or(renderer.default_size()),
+            self.font,
+            bounds,
+        );
 
         let size = limits.resolve(Size::new(width, height));
 
@@ -137,6 +142,7 @@ where
             defaults,
             layout.bounds(),
             &self.content,
+            #[allow(clippy::or_fun_call)]
             self.size.unwrap_or(renderer.default_size()),
             self.font,
             self.color,
@@ -188,6 +194,7 @@ pub trait Renderer: crate::Renderer {
     ///   * the color of the [`Text`]
     ///   * the [`HorizontalAlignment`] of the [`Text`]
     ///   * the [`VerticalAlignment`] of the [`Text`]
+    #[allow(clippy::too_many_arguments)]
     fn draw(
         &mut self,
         defaults: &Self::Defaults,
@@ -208,20 +215,5 @@ where
 {
     fn from(text: Text<Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(text)
-    }
-}
-
-impl<Renderer: self::Renderer> Clone for Text<Renderer> {
-    fn clone(&self) -> Self {
-        Self {
-            content: self.content.clone(),
-            size: self.size,
-            color: self.color,
-            font: self.font,
-            width: self.width,
-            height: self.height,
-            horizontal_alignment: self.horizontal_alignment,
-            vertical_alignment: self.vertical_alignment,
-        }
     }
 }

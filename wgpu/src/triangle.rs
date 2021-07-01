@@ -114,11 +114,7 @@ impl Pipeline {
                         wgpu::BufferBinding {
                             buffer: &constants_buffer.raw,
                             offset: 0,
-                            size: wgpu::BufferSize::new(std::mem::size_of::<
-                                Uniforms,
-                            >(
-                            )
-                                as u64),
+                            size: wgpu::BufferSize::new(UNIFORMS_SIZE as u64),
                         },
                     ),
                 }],
@@ -185,9 +181,7 @@ impl Pipeline {
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState {
-                    count: u32::from(
-                        antialiasing.map(|a| a.sample_count()).unwrap_or(1),
-                    ),
+                    count: antialiasing.map(|a| a.sample_count()).unwrap_or(1),
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
@@ -214,6 +208,7 @@ impl Pipeline {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
@@ -226,16 +221,13 @@ impl Pipeline {
         scale_factor: f32,
         meshes: &[layer::Mesh<'_>],
     ) {
-        // This looks a bit crazy, but we are just counting how many vertices
-        // and indices we will need to handle.
-        // TODO: Improve readability
-        let (total_vertices, total_indices) = meshes
-            .iter()
-            .map(|layer::Mesh { buffers, .. }| {
-                (buffers.vertices.len(), buffers.indices.len())
-            })
-            .fold((0, 0), |(total_v, total_i), (v, i)| {
-                (total_v + v, total_i + i)
+        // Count how many vertices and indices we will need to handle.
+        let (total_vertices, total_indices) =
+            meshes.iter().fold((0, 0), |(total_v, total_i), mesh| {
+                (
+                    total_v + mesh.buffers.vertices.len(),
+                    total_i + mesh.buffers.indices.len(),
+                )
             });
 
         // Then we ensure the current buffers are big enough, resizing if
@@ -257,7 +249,7 @@ impl Pipeline {
                                 buffer: &self.uniforms_buffer.raw,
                                 offset: 0,
                                 size: wgpu::BufferSize::new(
-                                    std::mem::size_of::<Uniforms>() as u64,
+                                    UNIFORMS_SIZE as u64,
                                 ),
                             },
                         ),
@@ -283,47 +275,43 @@ impl Pipeline {
             let vertices = bytemuck::cast_slice(&mesh.buffers.vertices);
             let indices = bytemuck::cast_slice(&mesh.buffers.indices);
 
-            match (
+            if let (Some(vertices_size), Some(indices_size)) = (
                 wgpu::BufferSize::new(vertices.len() as u64),
                 wgpu::BufferSize::new(indices.len() as u64),
             ) {
-                (Some(vertices_size), Some(indices_size)) => {
-                    {
-                        let mut vertex_buffer = staging_belt.write_buffer(
-                            encoder,
-                            &self.vertex_buffer.raw,
-                            (std::mem::size_of::<Vertex2D>() * last_vertex)
-                                as u64,
-                            vertices_size,
-                            device,
-                        );
+                {
+                    let mut vertex_buffer = staging_belt.write_buffer(
+                        encoder,
+                        &self.vertex_buffer.raw,
+                        (std::mem::size_of::<Vertex2D>() * last_vertex) as u64,
+                        vertices_size,
+                        device,
+                    );
 
-                        vertex_buffer.copy_from_slice(vertices);
-                    }
-
-                    {
-                        let mut index_buffer = staging_belt.write_buffer(
-                            encoder,
-                            &self.index_buffer.raw,
-                            (std::mem::size_of::<u32>() * last_index) as u64,
-                            indices_size,
-                            device,
-                        );
-
-                        index_buffer.copy_from_slice(indices);
-                    }
-
-                    uniforms.push(transform);
-                    offsets.push((
-                        last_vertex as u64,
-                        last_index as u64,
-                        mesh.buffers.indices.len(),
-                    ));
-
-                    last_vertex += mesh.buffers.vertices.len();
-                    last_index += mesh.buffers.indices.len();
+                    vertex_buffer.copy_from_slice(vertices);
                 }
-                _ => {}
+
+                {
+                    let mut index_buffer = staging_belt.write_buffer(
+                        encoder,
+                        &self.index_buffer.raw,
+                        (std::mem::size_of::<u32>() * last_index) as u64,
+                        indices_size,
+                        device,
+                    );
+
+                    index_buffer.copy_from_slice(indices);
+                }
+
+                uniforms.push(transform);
+                offsets.push((
+                    last_vertex as u64,
+                    last_index as u64,
+                    mesh.buffers.indices.len(),
+                ));
+
+                last_vertex += mesh.buffers.vertices.len();
+                last_index += mesh.buffers.indices.len();
             }
         }
 
@@ -386,7 +374,7 @@ impl Pipeline {
                 render_pass.set_bind_group(
                     0,
                     &self.constants,
-                    &[(std::mem::size_of::<Uniforms>() * i) as u32],
+                    &[(UNIFORMS_SIZE * i) as u32],
                 );
 
                 render_pass.set_index_buffer(
@@ -412,6 +400,8 @@ impl Pipeline {
         }
     }
 }
+
+const UNIFORMS_SIZE: usize = std::mem::size_of::<Uniforms>();
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]
