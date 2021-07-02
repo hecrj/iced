@@ -248,6 +248,51 @@ where
                     event_status
                 }
             }
+            Event::Mouse(mouse::Event::WheelScrolled { delta })
+                if layout.bounds().contains(cursor_position)
+                    && !*self.is_open =>
+            {
+                let y = match delta {
+                    mouse::ScrollDelta::Lines { y, .. }
+                    | mouse::ScrollDelta::Pixels { y, .. } => y,
+                };
+
+                if y.is_sign_negative() {
+                    let mut options_iter = self.options.iter();
+                    if let Some(selected) = self.selected.as_ref() {
+                        if let Some(_) =
+                            options_iter.position(|o| o == selected)
+                        {
+                            if let Some(prev_val) = options_iter.next() {
+                                messages
+                                    .push((self.on_selected)(prev_val.clone()));
+                            }
+                        }
+                    } else {
+                        messages
+                            .push((self.on_selected)(self.options[0].clone()));
+                    }
+                } else {
+                    let mut options_iter = self.options.iter().rev();
+                    if let Some(selected) = self.selected.as_ref() {
+                        if let Some(_) =
+                            options_iter.position(|o| o == selected)
+                        {
+                            if let Some(next_val) = options_iter.next() {
+                                messages
+                                    .push((self.on_selected)(next_val.clone()));
+                            }
+                        }
+                    } else {
+                        messages.push((self.on_selected)(
+                            self.options[self.options.len() - 1].clone(),
+                        ));
+                    }
+                }
+
+                return event::Status::Captured;
+            }
+
             _ => event::Status::Ignored,
         }
     }
