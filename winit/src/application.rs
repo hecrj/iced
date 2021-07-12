@@ -14,6 +14,7 @@ use iced_futures::futures;
 use iced_futures::futures::channel::mpsc;
 use iced_graphics::window;
 use iced_native::program::Program;
+use iced_native::Menu;
 use iced_native::{Cache, UserInterface};
 
 use std::mem::ManuallyDrop;
@@ -98,6 +99,11 @@ pub trait Application: Program<Clipboard = Clipboard> {
     fn should_exit(&self) -> bool {
         false
     }
+
+    /// TODO
+    fn menu(&self) -> Menu<Self::Message> {
+        Menu::new()
+    }
 }
 
 /// Runs an [`Application`] with an executor, compositor, and the provided
@@ -145,6 +151,7 @@ where
             application.mode(),
             event_loop.primary_monitor(),
         )
+        .with_menu(Some(conversion::menu(&application.menu())))
         .build(&event_loop)
         .map_err(Error::WindowCreationFailed)?;
 
